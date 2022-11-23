@@ -1,0 +1,43 @@
+#!/bin/sh
+#coding:utf-8
+
+patchelf_bin_path=`which patchelf`
+if [ $? -ne 0 ];then
+    echo -e "\033[31mpatchelf isn't installed.\e[0m"
+    echo "execute follow command to install:"
+    echo "sudo apt install patchelf"
+    exit
+fi
+
+libc_path=$1
+elf_path=$2
+elf_back="${elf_path}_fixed"
+
+#back up
+echo "backup binary..."
+cp "${elf_path}" "${elf_back}"
+echo "change binary attribute mode to x"
+chmod +x "${elf_back}"
+echo "start to fixed ld and libc..."
+if [ -f ${libc_path}/ld-[2].[0-9][0-9].so ]; then
+    $patchelf_bin_path --set-interpreter "${libc_path}"/ld-[2].[0-9][0-9].so "${elf_back}"
+    if [ $? -eq 0 ]; then
+        echo "\e[32mfixed ld ok.\e[0m"
+    else
+        echo "\e[31mfixed ld failed.\e[0m"
+    fi
+fi
+if [ -f $libc_path/libc-[2].[0-9][0-9].so ]; then
+    #$patchelf_bin_path --replace-needed libc.so.6 $libc_path/libc-[2].[0-9][0-9].so $elf_path
+    old_libc=`ldd ${elf_path}|grep libc|awk -F ' ' '{print $1}'`
+    
+    $patchelf_bin_path --replace-needed "${old_libc}" "${libc_path}"/libc-[2].[0-9][0-9].so "${elf_back}"
+    if [ $? -eq 0 ]; then
+        echo "\e[32mfixed libc ok.\e[0m"
+        new_libc=`ldd ${elf_back}|grep libc|awk -F ' ' '{print $1}'`
+        echo "\033[32m${old_libc} => ${new_libc}\033[0m"
+        ldd ${elf_back}
+    else
+        echo "\033[31m fixed libc failed.\033[0m"
+    fi
+fi
